@@ -723,4 +723,37 @@ func testPack(t *testing.T, context spec.G, it spec.S) {
 			})
 		})
 	})
+
+	context("DOCKER_HOST", func() {
+		var (
+			pack occam.Pack
+		)
+
+		it.Before(func() {
+			pack = occam.NewPack().WithExecutable(executable).WithDockerImageInspectClient(dockerImageInspectClient)
+			pack.Build.LookupEnv = func(key string) (string, bool) {
+				if key == "DOCKER_HOST" {
+					return "test", true
+				}
+				return "", false
+			}
+		})
+
+		it.After(func() {
+			pack.Build.LookupEnv = nil
+		})
+
+		it("ensures DOCKER_HOST environment variable is respected", func() {
+			image, logs, err := pack.Build.Execute("myapp", "/some/app/path")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(image).To(Equal(occam.Image{
+				ID: "some-image-id",
+			}))
+			Expect(logs.String()).To(Equal("some stdout output\nsome stderr output\n"))
+
+			Expect(executable.ExecuteCall.Receives.Execution.Args).To(Equal([]string{
+				"build", "myapp", "--docker-host", "inherit", "--path", "/some/app/path",
+			}))
+		})
+	})
 }

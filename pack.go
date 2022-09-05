@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 
 	"github.com/paketo-buildpacks/packit/v2/pexec"
@@ -31,6 +32,7 @@ func NewPack() Pack {
 		Build: PackBuild{
 			executable:               executable,
 			dockerImageInspectClient: NewDocker().Image.Inspect,
+			LookupEnv: os.LookupEnv,
 		},
 		Builder: PackBuilder{
 			Inspect: PackBuilderInspect{
@@ -78,6 +80,7 @@ type PackBuild struct {
 	sbomOutputDir string
 	volumes       []string
 	gid           string
+	LookupEnv     func(string) (string, bool)
 
 	// TODO: remove after deprecation period
 	noPull bool
@@ -141,6 +144,13 @@ func (pb PackBuild) WithVolumes(volumes ...string) PackBuild {
 
 func (pb PackBuild) Execute(name, path string) (Image, fmt.Stringer, error) {
 	args := []string{"build", name}
+
+	if pb.LookupEnv == nil {
+		pb.LookupEnv = os.LookupEnv
+	}
+	if _, ok := pb.LookupEnv("DOCKER_HOST"); ok {
+		args = append(args, "--docker-host", "inherit")
+	}
 
 	if pb.verbose {
 		args = append(args, "--verbose")
